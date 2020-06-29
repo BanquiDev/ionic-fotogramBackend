@@ -1,0 +1,138 @@
+import { Router, Response, Request } from "express"
+import { Usuario } from '../models/usuarioModel';
+import bcrypt from 'bcrypt'
+import Token from '../classes/token';
+import { verificaToken } from '../middlewares/autentication';
+
+
+const userRoutes = Router()
+
+
+//Login
+userRoutes.post('/login', (req: Request, res:Response)=>{
+
+    const body = req.body
+    //busca el usuariox mail
+    Usuario.findOne({email: body.email}, (err, userDB)=>{
+        if (err )throw err
+
+        if(!userDB){
+            return res.json({
+                ok:false,
+                mensaje:'Usuario/contrasena no son correctos'
+            })
+        }
+    //compara contrasenas
+        if ( userDB.compararPassword(body.password)){
+
+            const tokenUser = Token.getJwtToken({
+                _id: userDB._id,
+                nombre: userDB.nombre,
+                email: userDB.email,
+                avatar: userDB.avatar
+            })
+
+            res.json({
+                ok:true, 
+                token: tokenUser
+            })
+        }else{
+            res.json({
+                ok:true, 
+                mensaje: 'Usuario/contrasena no son correctos+++'
+            })
+        }
+    })
+})
+
+
+
+//Crear un Usuario
+userRoutes.post('/create', (req: Request, res: Response) =>{
+
+    const user = {
+        nombre: req.body.nombre, 
+        email: req.body.email, 
+        password: bcrypt.hashSync(req.body.password, 10),
+        avatar: req.body.avatar
+    }
+
+
+    Usuario.create( user ).then( userDB =>{
+
+
+        const tokenUser = Token.getJwtToken({
+            _id: userDB._id,
+            nombre: userDB.nombre,
+            email: userDB.email,
+            avatar: userDB.avatar
+        })
+
+        res.json({
+            ok:true, 
+            token: tokenUser
+        })
+
+       
+    }).catch(err=>{
+
+        res.json({
+            ok: false,
+            err
+        })
+    })
+
+
+
+})
+
+//Actualizar Usuario
+
+userRoutes.post('/update', verificaToken, (req: any, res:Response)=>{
+
+    const user = {
+        nombre: req.body.nombre || req.usuario.nombre,
+        email: req.body.email || req.usuario.email,
+        avatar: req.body.avatar || req.usuario.avatar
+    }
+
+    Usuario.findByIdAndUpdate( req.usuario._id, user, {new:true}, (err, userDB) =>{
+
+        if( err) throw err
+
+        if (!userDB ){
+            return res.json({
+                ok:false,
+                mensaje:'no existe un usuario con ese Mail'
+            })
+        }
+
+        const tokenUser = Token.getJwtToken({
+            _id: userDB._id,
+            nombre: userDB.nombre,
+            email: userDB.email,
+            avatar: userDB.avatar
+        })
+
+        res.json({
+            ok:true, 
+            token: tokenUser,
+            user: userDB
+        })
+
+    } )
+
+
+})
+
+userRoutes.get('/', [verificaToken], (req:any, res:Response)=>{
+
+    const usuario = req.usuario
+
+    res.json({
+        ok:true, 
+        usuario
+    })
+})
+
+export default userRoutes;
